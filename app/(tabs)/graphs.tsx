@@ -119,7 +119,7 @@ function BarChart({ sessions, period }: { sessions: SleepSession[]; period: Peri
   );
 }
 
-const WAKE_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const SHORT_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WAKE_MIN_HOUR = 4;
 const WAKE_MAX_HOUR = 13;
 const WAKE_HOUR_RANGE = WAKE_MAX_HOUR - WAKE_MIN_HOUR;
@@ -144,13 +144,12 @@ function WakeUpChart({ sessions }: { sessions: SleepSession[] }) {
     d.setDate(start.getDate() + i);
     const ds = localDateString(d);
     const session = sessions.find(s => s.date === ds);
-    const dayIdx = (d.getDay() + 6) % 7;
     let wakeHr: number | null = null;
     if (session?.wakeTime) {
       const w = new Date(session.wakeTime);
       wakeHr = w.getHours() + w.getMinutes() / 60;
     }
-    return { ds, dayLabel: WAKE_DAYS[dayIdx], wakeHr, session };
+    return { ds, dayLabel: SHORT_DAYS[d.getDay()], wakeHr, session };
   });
 
   const validPts = weekDays

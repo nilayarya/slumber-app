@@ -47,15 +47,12 @@ export function qualityColor(score: number | null | undefined): string {
 }
 
 export function getWeekRange(date = new Date()): { start: string; end: string } {
-  const day = date.getDay();
-  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(date);
-  monday.setDate(diff);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
+  const end = new Date(date);
+  const start = new Date(date);
+  start.setDate(end.getDate() - 6);
   return {
-    start: localDateString(monday),
-    end: localDateString(sunday),
+    start: localDateString(start),
+    end: localDateString(end),
   };
 }
 

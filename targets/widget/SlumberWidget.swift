@@ -35,14 +35,11 @@ func loadSessions() -> [SleepSession] {
 func getWeekRange() -> (start: String, end: String) {
     let cal = Calendar.current
     let today = Date()
-    let weekday = cal.component(.weekday, from: today)
-    let daysToMonday = (weekday == 1) ? -6 : (2 - weekday)
-    let monday = cal.date(byAdding: .day, value: daysToMonday, to: today)!
-    let sunday = cal.date(byAdding: .day, value: 6, to: monday)!
+    let start = cal.date(byAdding: .day, value: -6, to: today)!
 
     let fmt = DateFormatter()
     fmt.dateFormat = "yyyy-MM-dd"
-    return (fmt.string(from: monday), fmt.string(from: sunday))
+    return (fmt.string(from: start), fmt.string(from: today))
 }
 
 struct WakeDataPoint {
@@ -54,7 +51,6 @@ struct WakeDataPoint {
 func weeklyWakeData() -> [WakeDataPoint] {
     let sessions = loadSessions()
     let range = getWeekRange()
-    let dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
     let fmt = DateFormatter()
     fmt.dateFormat = "yyyy-MM-dd"
@@ -64,10 +60,13 @@ func weeklyWakeData() -> [WakeDataPoint] {
     let timeFmt = DateFormatter()
     timeFmt.dateFormat = "h:mm a"
 
+    let dayFmt = DateFormatter()
+    dayFmt.dateFormat = "EEE"
+
     return (0..<7).map { i in
         let d = cal.date(byAdding: .day, value: i, to: startDate)!
         let ds = fmt.string(from: d)
-        let dayIdx = (cal.component(.weekday, from: d) + 5) % 7
+        let label = dayFmt.string(from: d)
 
         if let session = sessions.first(where: { $0.date == ds }) {
             let isoFmt = ISO8601DateFormatter()
@@ -79,14 +78,14 @@ func weeklyWakeData() -> [WakeDataPoint] {
                 let hour = Double(cal.component(.hour, from: wakeDate)) +
                            Double(cal.component(.minute, from: wakeDate)) / 60.0
                 return WakeDataPoint(
-                    dayLabel: dayLabels[dayIdx],
+                    dayLabel: label,
                     wakeHour: hour,
                     wakeTimeFormatted: timeFmt.string(from: wakeDate)
                 )
             }
         }
 
-        return WakeDataPoint(dayLabel: dayLabels[dayIdx], wakeHour: nil, wakeTimeFormatted: nil)
+        return WakeDataPoint(dayLabel: label, wakeHour: nil, wakeTimeFormatted: nil)
     }
 }
 
