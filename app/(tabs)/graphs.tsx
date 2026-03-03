@@ -315,10 +315,19 @@ function WakeUpChart({ sessions }: { sessions: SleepSession[] }) {
 
 export default function GraphsScreen() {
   const [period, setPeriod] = useState<Period>("week");
+  const [showDebug, setShowDebug] = useState(false);
   const { sessions } = useSleep();
 
   const now = new Date();
   const range = period === "week" ? getWeekRange(now) : getMonthRange(now);
+
+  const debugStart = new Date(range.start + "T12:00:00");
+  const chartDates = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(debugStart);
+    d.setDate(debugStart.getDate() + i);
+    return localDateString(d);
+  });
+  const matchedDates = chartDates.filter(ds => sessions.some(s => s.date === ds));
 
   return (
     <View style={[styles.container, { paddingTop: Platform.OS === "web" ? 67 : 0 }]}>
@@ -327,6 +336,28 @@ export default function GraphsScreen() {
           <Text style={styles.headerTitle}>Insights</Text>
           <PeriodToggle value={period} onChange={setPeriod} />
         </View>
+
+        <Pressable onPress={() => setShowDebug(!showDebug)} style={{ paddingHorizontal: 24, paddingBottom: 8 }}>
+          <Text style={{ fontFamily: "DM_Sans_400Regular", fontSize: 11, color: C.textMuted }}>
+            {sessions.length} sessions | range {range.start} → {range.end} | {matchedDates.length} matched
+          </Text>
+        </Pressable>
+        {showDebug && (
+          <View style={{ paddingHorizontal: 24, paddingBottom: 12, gap: 2 }}>
+            <Text style={{ fontFamily: "DM_Sans_500Medium", fontSize: 11, color: C.accent }}>Chart slots:</Text>
+            {chartDates.map(ds => (
+              <Text key={ds} style={{ fontFamily: "DM_Sans_400Regular", fontSize: 10, color: sessions.some(s => s.date === ds) ? "#10B981" : C.textMuted }}>
+                {ds} {sessions.some(s => s.date === ds) ? "✓ HAS DATA" : "—"}
+              </Text>
+            ))}
+            <Text style={{ fontFamily: "DM_Sans_500Medium", fontSize: 11, color: C.accent, marginTop: 4 }}>Session dates:</Text>
+            {sessions.slice(0, 10).map(s => (
+              <Text key={s.id} style={{ fontFamily: "DM_Sans_400Regular", fontSize: 10, color: C.textSecondary }}>
+                {s.date} | onset={s.sleepOnset.substring(0, 19)} | wake={s.wakeTime.substring(0, 19)} | dur={s.durationMinutes}min | {s.source}
+              </Text>
+            ))}
+          </View>
+        )}
 
         {sessions.length === 0 ? (
           <View style={styles.empty}>
