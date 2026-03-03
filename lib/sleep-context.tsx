@@ -16,6 +16,7 @@ import {
   updateSession,
   deleteSession,
   initialWidgetSync,
+  migrateSessionDates,
   type SleepSession,
   type CreateSessionInput,
 } from "./sleep-store";
@@ -52,10 +53,12 @@ export function SleepProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    load();
-    if (Platform.OS === "ios") {
-      initialWidgetSync();
-    }
+    migrateSessionDates().then(() => {
+      load();
+      if (Platform.OS === "ios") {
+        initialWidgetSync();
+      }
+    });
   }, [load]);
 
   const syncNow = useCallback(async (): Promise<SyncResult> => {
