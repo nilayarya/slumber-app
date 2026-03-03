@@ -16,7 +16,6 @@ import {
   updateSession,
   deleteSession,
   initialWidgetSync,
-  migrateSessionDates,
   type SleepSession,
   type CreateSessionInput,
 } from "./sleep-store";
@@ -53,8 +52,7 @@ export function SleepProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    migrateSessionDates().then(() => {
-      load();
+    load().then(() => {
       if (Platform.OS === "ios") {
         initialWidgetSync();
       }
