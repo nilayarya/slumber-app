@@ -25,11 +25,24 @@ let appGroupID = "group.com.slumber.sleeptracker"
 let storageKey = "slumber:sessions:v1"
 
 func loadSessions() -> [SleepSession] {
-    guard let defaults = UserDefaults(suiteName: appGroupID),
-          let data = defaults.string(forKey: storageKey)?.data(using: .utf8) else {
-        return []
+    let fileName = storageKey.replacingOccurrences(of: ":", with: "_") + ".json"
+
+    if let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID) {
+        let fileURL = containerURL.appendingPathComponent(fileName)
+        if let data = try? Data(contentsOf: fileURL),
+           let sessions = try? JSONDecoder().decode([SleepSession].self, from: data) {
+            return sessions
+        }
     }
-    return (try? JSONDecoder().decode([SleepSession].self, from: data)) ?? []
+
+    if let defaults = UserDefaults(suiteName: appGroupID),
+       let str = defaults.string(forKey: storageKey),
+       let data = str.data(using: .utf8),
+       let sessions = try? JSONDecoder().decode([SleepSession].self, from: data) {
+        return sessions
+    }
+
+    return []
 }
 
 func getWeekRange() -> (start: String, end: String) {
