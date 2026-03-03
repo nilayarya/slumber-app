@@ -43,6 +43,9 @@
       "expo-web-browser",
       ["@kingstinct/react-native-healthkit", {
         "NSHealthShareUsageDescription": "Slumber analyzes your step count, ambient sound levels, and headphone usage to automatically detect when you're asleep — no manual logging needed."
+      }],
+      ["./plugins/withAppGroups", {
+        "groups": ["group.com.slumber.sleeptracker"]
       }]
     ],
     "experiments": {
