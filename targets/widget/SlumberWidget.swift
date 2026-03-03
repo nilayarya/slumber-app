@@ -3,11 +3,6 @@ import SwiftUI
 
 // MARK: - Shared Data
 
-struct WakeEntry: Codable {
-    let date: String      // "2026-03-01"
-    let wakeTime: String  // ISO 8601
-}
-
 struct SleepSession: Codable {
     let id: String
     let date: String
@@ -55,7 +50,8 @@ func getWeekRange() -> (start: String, end: String) {
     return (fmt.string(from: start), fmt.string(from: today))
 }
 
-struct WakeDataPoint {
+struct WakeDataPoint: Identifiable {
+    let id: Int
     let dayLabel: String
     let wakeHour: Double?
     let wakeTimeFormatted: String?
@@ -72,14 +68,25 @@ func parseISO(_ str: String) -> Date? {
 
     let df = DateFormatter()
     df.locale = Locale(identifier: "en_US_POSIX")
-    for pattern in ["yyyy-MM-dd'T'HH:mm:ss.SSSZ", "yyyy-MM-dd'T'HH:mm:ssZ", "yyyy-MM-dd'T'HH:mm:ss"] {
+    for pattern in [
+        "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+        "yyyy-MM-dd'T'HH:mm:ss.SSS",
+        "yyyy-MM-dd'T'HH:mm:ssZ",
+        "yyyy-MM-dd'T'HH:mm:ss"
+    ] {
         df.dateFormat = pattern
         if let d = df.date(from: str) { return d }
     }
     return nil
 }
 
-func weeklyWakeData() -> [WakeDataPoint] {
+struct WeeklyResult {
+    let points: [WakeDataPoint]
+    let totalSessions: Int
+    let matchedCount: Int
+}
+
+func weeklyWakeData() -> WeeklyResult {
     let sessions = loadSessions()
     let range = getWeekRange()
 
@@ -94,7 +101,9 @@ func weeklyWakeData() -> [WakeDataPoint] {
     let dayFmt = DateFormatter()
     dayFmt.dateFormat = "EEE"
 
-    return (0..<7).map { i in
+    var matched = 0
+
+    let points: [WakeDataPoint] = (0..<7).map { i in
         let d = cal.date(byAdding: .day, value: i, to: startDate)!
         let ds = fmt.string(from: d)
         let label = dayFmt.string(from: d)
@@ -103,15 +112,19 @@ func weeklyWakeData() -> [WakeDataPoint] {
            let wakeDate = parseISO(session.wakeTime) {
             let hour = Double(cal.component(.hour, from: wakeDate)) +
                        Double(cal.component(.minute, from: wakeDate)) / 60.0
+            matched += 1
             return WakeDataPoint(
+                id: i,
                 dayLabel: label,
                 wakeHour: hour,
                 wakeTimeFormatted: timeFmt.string(from: wakeDate)
             )
         }
 
-        return WakeDataPoint(dayLabel: label, wakeHour: nil, wakeTimeFormatted: nil)
+        return WakeDataPoint(id: i, dayLabel: label, wakeHour: nil, wakeTimeFormatted: nil)
     }
+
+    return WeeklyResult(points: points, totalSessions: sessions.count, matchedCount: matched)
 }
 
 // MARK: - Timeline
@@ -119,19 +132,24 @@ func weeklyWakeData() -> [WakeDataPoint] {
 struct WakeTimelineEntry: TimelineEntry {
     let date: Date
     let wakeData: [WakeDataPoint]
+    let totalSessions: Int
+    let matchedCount: Int
 }
 
 struct WakeTimelineProvider: TimelineProvider {
     func placeholder(in context: Context) -> WakeTimelineEntry {
-        WakeTimelineEntry(date: Date(), wakeData: sampleData())
+        let sample = sampleData()
+        return WakeTimelineEntry(date: Date(), wakeData: sample, totalSessions: 5, matchedCount: 5)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (WakeTimelineEntry) -> Void) {
-        completion(WakeTimelineEntry(date: Date(), wakeData: weeklyWakeData()))
+        let result = weeklyWakeData()
+        completion(WakeTimelineEntry(date: Date(), wakeData: result.points, totalSessions: result.totalSessions, matchedCount: result.matchedCount))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<WakeTimelineEntry>) -> Void) {
-        let entry = WakeTimelineEntry(date: Date(), wakeData: weeklyWakeData())
+        let result = weeklyWakeData()
+        let entry = WakeTimelineEntry(date: Date(), wakeData: result.points, totalSessions: result.totalSessions, matchedCount: result.matchedCount)
         let nextUpdate = Calendar.current.date(byAdding: .minute, value: 30, to: Date())!
         completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
     }
@@ -139,7 +157,18 @@ struct WakeTimelineProvider: TimelineProvider {
     func sampleData() -> [WakeDataPoint] {
         let labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         let hours: [Double?] = [7.0, 6.5, 7.25, nil, 8.0, 9.5, nil]
-        return zip(labels, hours).map { WakeDataPoint(dayLabel: $0.0, wakeHour: $0.1, wakeTimeFormatted: $0.1 != nil ? "\(Int($0.1!)):\(String(format: "%02d", Int(($0.1!.truncatingRemainder(dividingBy: 1)) * 60))) AM" : nil) }
+        return zip(labels, hours).enumerated().map { (idx, pair) in
+            WakeDataPoint(
+                id: idx,
+                dayLabel: pair.0,
+                wakeHour: pair.1,
+                wakeTimeFormatted: pair.1.map { h in
+                    let hr = Int(h)
+                    let mn = Int((h.truncatingRemainder(dividingBy: 1)) * 60)
+                    return "\(hr):\(String(format: "%02d", mn)) AM"
+                }
+            )
+        }
     }
 }
 
@@ -148,33 +177,38 @@ struct WakeTimelineProvider: TimelineProvider {
 struct WakeChartView: View {
     let data: [WakeDataPoint]
 
-    private var minHour: Double {
-        let hours = data.compactMap { $0.wakeHour }
-        guard !hours.isEmpty else { return 6 }
-        return Double(max(0, Int(hours.min()!) - 1))
+    private var validHours: [Double] {
+        data.compactMap { $0.wakeHour }
     }
 
-    private var maxHour: Double {
-        let hours = data.compactMap { $0.wakeHour }
-        guard !hours.isEmpty else { return 10 }
-        return Double(min(24, Int(ceil(hours.max()!)) + 1))
+    private var computedMinHour: Double {
+        guard !validHours.isEmpty else { return 6 }
+        return floor(max(0, validHours.min()! - 1))
+    }
+
+    private var computedMaxHour: Double {
+        guard !validHours.isEmpty else { return 10 }
+        return ceil(min(24, validHours.max()! + 1))
     }
 
     var body: some View {
+        let mn = computedMinHour
+        let mx = computedMaxHour
+        let range = max(mx - mn, 2.0)
+
         GeometryReader { geo in
             let w = geo.size.width
             let h = geo.size.height
             let leftPad: CGFloat = 30
-            let rightPad: CGFloat = 14
-            let topPad: CGFloat = 6
+            let rightPad: CGFloat = 10
+            let topPad: CGFloat = 8
             let bottomPad: CGFloat = 18
             let plotW = w - leftPad - rightPad
             let plotH = h - topPad - bottomPad
-            let hourRange = max(maxHour - minHour, 2)
 
             ZStack(alignment: .topLeading) {
-                ForEach(Int(minHour)...Int(maxHour), id: \.self) { hour in
-                    let frac = CGFloat(Double(hour) - minHour) / CGFloat(hourRange)
+                ForEach(Int(mn)...Int(mx), id: \.self) { hour in
+                    let frac = CGFloat(Double(hour) - mn) / CGFloat(range)
                     let y = topPad + frac * plotH
 
                     Path { path in
@@ -189,23 +223,21 @@ struct WakeChartView: View {
                         .position(x: leftPad - 14, y: y)
                 }
 
-                // Day labels
                 ForEach(0..<7, id: \.self) { i in
                     let x = leftPad + (CGFloat(i) / 6.0) * plotW
                     Text(data[i].dayLabel)
                         .font(.system(size: 9, weight: .medium))
                         .foregroundColor(Color.white.opacity(0.5))
-                        .position(x: x, y: h - 6)
+                        .position(x: x, y: h - 4)
                 }
 
-                // Line connecting valid points
-                let validPoints = validChartPoints(plotW: plotW, plotH: plotH, leftPad: leftPad, topPad: topPad, hourRange: hourRange)
+                let pts = chartPoints(mn: mn, range: range, plotW: plotW, plotH: plotH, leftPad: leftPad, topPad: topPad)
 
-                if validPoints.count >= 2 {
+                if pts.count >= 2 {
                     Path { path in
-                        path.move(to: validPoints[0])
-                        for i in 1..<validPoints.count {
-                            path.addLine(to: validPoints[i])
+                        path.move(to: pts[0])
+                        for i in 1..<pts.count {
+                            path.addLine(to: pts[i])
                         }
                     }
                     .stroke(
@@ -214,8 +246,7 @@ struct WakeChartView: View {
                     )
                 }
 
-                // Dots
-                ForEach(0..<validPoints.count, id: \.self) { i in
+                ForEach(0..<pts.count, id: \.self) { i in
                     Circle()
                         .fill(Color(red: 0.96, green: 0.62, blue: 0.04))
                         .frame(width: 8, height: 8)
@@ -223,7 +254,7 @@ struct WakeChartView: View {
                             Circle()
                                 .stroke(Color(red: 0.03, green: 0.05, blue: 0.09), lineWidth: 2)
                         )
-                        .position(validPoints[i])
+                        .position(pts[i])
                 }
             }
         }
@@ -236,12 +267,12 @@ struct WakeChartView: View {
         return "\(h - 12)p"
     }
 
-    private func validChartPoints(plotW: CGFloat, plotH: CGFloat, leftPad: CGFloat, topPad: CGFloat, hourRange: Double) -> [CGPoint] {
+    private func chartPoints(mn: Double, range: Double, plotW: CGFloat, plotH: CGFloat, leftPad: CGFloat, topPad: CGFloat) -> [CGPoint] {
         var points: [CGPoint] = []
         for i in 0..<7 {
             guard let wh = data[i].wakeHour else { continue }
             let x = leftPad + (CGFloat(i) / 6.0) * plotW
-            let frac = CGFloat((wh - minHour) / hourRange)
+            let frac = CGFloat(max(0, min(1, (wh - mn) / range)))
             let y = topPad + frac * plotH
             points.append(CGPoint(x: x, y: y))
         }
@@ -254,30 +285,53 @@ struct WakeChartView: View {
 struct SlumberWidgetView: View {
     let entry: WakeTimelineEntry
 
+    private let amber = Color(red: 0.96, green: 0.62, blue: 0.04)
+    private let bg = Color(red: 0.03, green: 0.05, blue: 0.09)
+
+    private var hasData: Bool {
+        entry.wakeData.contains { $0.wakeHour != nil }
+    }
+
     var body: some View {
         ZStack {
-            // Background
-            Color(red: 0.03, green: 0.05, blue: 0.09)
+            bg
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Image(systemName: "sunrise.fill")
                         .font(.system(size: 11))
-                        .foregroundColor(Color(red: 0.96, green: 0.62, blue: 0.04))
+                        .foregroundColor(amber)
                     Text("Wake-Up Times")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
                     Spacer()
-                    Text("This Week")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(Color.white.opacity(0.4))
+                    Text("\(entry.matchedCount)/\(entry.totalSessions)s")
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(Color.white.opacity(0.25))
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
 
-                WakeChartView(data: entry.wakeData)
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 8)
+                if hasData {
+                    WakeChartView(data: entry.wakeData)
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 8)
+                } else {
+                    Spacer()
+                    VStack(spacing: 4) {
+                        Image(systemName: "moon.zzz")
+                            .font(.system(size: 20))
+                            .foregroundColor(Color.white.opacity(0.2))
+                        Text("No wake data this week")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(Color.white.opacity(0.3))
+                        Text("Open Slumber to sync")
+                            .font(.system(size: 9))
+                            .foregroundColor(Color.white.opacity(0.2))
+                    }
+                    .frame(maxWidth: .infinity)
+                    Spacer()
+                }
             }
         }
     }
@@ -308,7 +362,9 @@ struct SlumberWidget_Previews: PreviewProvider {
         SlumberWidgetView(
             entry: WakeTimelineEntry(
                 date: Date(),
-                wakeData: WakeTimelineProvider().sampleData()
+                wakeData: WakeTimelineProvider().sampleData(),
+                totalSessions: 5,
+                matchedCount: 5
             )
         )
         .previewContext(WidgetPreviewContext(family: .systemMedium))
