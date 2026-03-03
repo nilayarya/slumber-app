@@ -91,9 +91,14 @@ async function syncToWidget(json: string): Promise<void> {
   try {
     const { WidgetSyncModule } = NativeModules;
     if (WidgetSyncModule) {
+      console.log(`[Slumber] Widget sync: writing ${json.length} bytes to App Group ${APP_GROUP}`);
       WidgetSyncModule.syncData(STORAGE_KEY, json, APP_GROUP);
+    } else {
+      console.log("[Slumber] Widget sync: WidgetSyncModule not available (native module not linked)");
     }
-  } catch {}
+  } catch (e) {
+    console.log("[Slumber] Widget sync error:", e);
+  }
 }
 
 async function saveAll(sessions: SleepSession[]): Promise<void> {

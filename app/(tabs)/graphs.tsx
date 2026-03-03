@@ -50,7 +50,7 @@ function BarChart({ sessions, period }: { sessions: SleepSession[]; period: Peri
   const cw = SCREEN_WIDTH - 88;
   const barPadH = 4;
   const innerW = cw - barPadH * 2;
-  const ch = 160;
+  const ch = 130;
   const count = period === "week" ? 7 : 30;
   const gap = period === "week" ? 6 : 3;
   const barW = (innerW - gap * (count - 1)) / count;
@@ -120,9 +120,6 @@ function BarChart({ sessions, period }: { sessions: SleepSession[]; period: Peri
 }
 
 const SHORT_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const WAKE_MIN_HOUR = 4;
-const WAKE_MAX_HOUR = 13;
-const WAKE_HOUR_RANGE = WAKE_MAX_HOUR - WAKE_MIN_HOUR;
 
 function WakeUpChart({ sessions }: { sessions: SleepSession[] }) {
   const [tooltip, setTooltip] = useState<{ x: number; y: number; label: string } | null>(null);
@@ -132,7 +129,7 @@ function WakeUpChart({ sessions }: { sessions: SleepSession[] }) {
   const topPad = 10;
   const bottomPad = 24;
   const plotW = cw - leftPad - rightPad;
-  const plotH = 180;
+  const plotH = 120;
   const totalH = plotH + topPad + bottomPad;
 
   const now = new Date();
@@ -151,6 +148,13 @@ function WakeUpChart({ sessions }: { sessions: SleepSession[] }) {
     }
     return { ds, dayLabel: SHORT_DAYS[d.getDay()], wakeHr, session };
   });
+
+  const wakeHours = weekDays.map(d => d.wakeHr).filter((h): h is number => h != null);
+  const dataMin = wakeHours.length > 0 ? Math.min(...wakeHours) : 7;
+  const dataMax = wakeHours.length > 0 ? Math.max(...wakeHours) : 9;
+  const WAKE_MIN_HOUR = Math.floor(Math.max(0, dataMin - 1));
+  const WAKE_MAX_HOUR = Math.ceil(Math.min(24, dataMax + 1));
+  const WAKE_HOUR_RANGE = Math.max(WAKE_MAX_HOUR - WAKE_MIN_HOUR, 2);
 
   const validPts = weekDays
     .map((d, i) => {
@@ -174,13 +178,7 @@ function WakeUpChart({ sessions }: { sessions: SleepSession[] }) {
   for (let h = WAKE_MIN_HOUR; h <= WAKE_MAX_HOUR; h++) {
     const yFrac = (h - WAKE_MIN_HOUR) / WAKE_HOUR_RANGE;
     const y = topPad + yFrac * plotH;
-    const isHalf = false;
-    hourLines.push({ h, y, isHalf });
-
-    if (h < WAKE_MAX_HOUR) {
-      const halfY = topPad + ((h + 0.5 - WAKE_MIN_HOUR) / WAKE_HOUR_RANGE) * plotH;
-      hourLines.push({ h: h + 0.5, y: halfY, isHalf: true });
-    }
+    hourLines.push({ h, y, isHalf: false });
   }
 
   return (
@@ -200,37 +198,31 @@ function WakeUpChart({ sessions }: { sessions: SleepSession[] }) {
         </View>
       ) : (<View>
         <Svg width={cw} height={totalH}>
-          {hourLines.map((line, i) => {
-            const isFullHour = !line.isHalf;
-            return (
-              <React.Fragment key={`hl-${i}`}>
-                <Line
-                  x1={leftPad}
-                  y1={line.y}
-                  x2={cw - rightPad}
-                  y2={line.y}
-                  stroke={C.textMuted}
-                  strokeWidth={0.7}
-                  strokeDasharray={line.isHalf ? "3 4" : "0"}
-                  opacity={line.isHalf ? 0.2 : 0.15}
-                />
-                {isFullHour && (
-                  <SvgText
-                    x={leftPad - 6}
-                    y={line.y + 4}
-                    fontSize={10}
-                    fill={C.textMuted}
-                    textAnchor="end"
-                    opacity={0.7}
-                  >
-                    {line.h <= 12
-                      ? `${line.h === 0 ? 12 : line.h}${line.h < 12 ? "a" : "p"}`
-                      : `${line.h - 12}p`}
-                  </SvgText>
-                )}
-              </React.Fragment>
-            );
-          })}
+          {hourLines.map((line, i) => (
+            <React.Fragment key={`hl-${i}`}>
+              <Line
+                x1={leftPad}
+                y1={line.y}
+                x2={cw - rightPad}
+                y2={line.y}
+                stroke={C.textMuted}
+                strokeWidth={0.7}
+                opacity={0.15}
+              />
+              <SvgText
+                x={leftPad - 6}
+                y={line.y + 4}
+                fontSize={10}
+                fill={C.textMuted}
+                textAnchor="end"
+                opacity={0.7}
+              >
+                {line.h <= 12
+                  ? `${line.h === 0 ? 12 : line.h}${line.h < 12 ? "a" : "p"}`
+                  : `${line.h - 12}p`}
+              </SvgText>
+            </React.Fragment>
+          ))}
 
           {weekDays.map((d, i) => {
             const x = leftPad + (i / 6) * plotW;
@@ -315,19 +307,10 @@ function WakeUpChart({ sessions }: { sessions: SleepSession[] }) {
 
 export default function GraphsScreen() {
   const [period, setPeriod] = useState<Period>("week");
-  const [showDebug, setShowDebug] = useState(false);
   const { sessions } = useSleep();
 
   const now = new Date();
   const range = period === "week" ? getWeekRange(now) : getMonthRange(now);
-
-  const debugStart = new Date(range.start + "T12:00:00");
-  const chartDates = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(debugStart);
-    d.setDate(debugStart.getDate() + i);
-    return localDateString(d);
-  });
-  const matchedDates = chartDates.filter(ds => sessions.some(s => s.date === ds));
 
   return (
     <View style={[styles.container, { paddingTop: Platform.OS === "web" ? 67 : 0 }]}>
@@ -336,28 +319,6 @@ export default function GraphsScreen() {
           <Text style={styles.headerTitle}>Insights</Text>
           <PeriodToggle value={period} onChange={setPeriod} />
         </View>
-
-        <Pressable onPress={() => setShowDebug(!showDebug)} style={{ paddingHorizontal: 24, paddingBottom: 8 }}>
-          <Text style={{ fontFamily: "DM_Sans_400Regular", fontSize: 11, color: C.textMuted }}>
-            {sessions.length} sessions | range {range.start} → {range.end} | {matchedDates.length} matched
-          </Text>
-        </Pressable>
-        {showDebug && (
-          <View style={{ paddingHorizontal: 24, paddingBottom: 12, gap: 2 }}>
-            <Text style={{ fontFamily: "DM_Sans_500Medium", fontSize: 11, color: C.accent }}>Chart slots:</Text>
-            {chartDates.map(ds => (
-              <Text key={ds} style={{ fontFamily: "DM_Sans_400Regular", fontSize: 10, color: sessions.some(s => s.date === ds) ? "#10B981" : C.textMuted }}>
-                {ds} {sessions.some(s => s.date === ds) ? "✓ HAS DATA" : "—"}
-              </Text>
-            ))}
-            <Text style={{ fontFamily: "DM_Sans_500Medium", fontSize: 11, color: C.accent, marginTop: 4 }}>Session dates:</Text>
-            {sessions.slice(0, 10).map(s => (
-              <Text key={s.id} style={{ fontFamily: "DM_Sans_400Regular", fontSize: 10, color: C.textSecondary }}>
-                {s.date} | onset={s.sleepOnset.substring(0, 19)} | wake={s.wakeTime.substring(0, 19)} | dur={s.durationMinutes}min | {s.source}
-              </Text>
-            ))}
-          </View>
-        )}
 
         {sessions.length === 0 ? (
           <View style={styles.empty}>

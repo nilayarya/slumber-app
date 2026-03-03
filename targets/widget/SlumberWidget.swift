@@ -48,6 +48,24 @@ struct WakeDataPoint {
     let wakeTimeFormatted: String?
 }
 
+func parseISO(_ str: String) -> Date? {
+    let fmtA = ISO8601DateFormatter()
+    fmtA.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    if let d = fmtA.date(from: str) { return d }
+
+    let fmtB = ISO8601DateFormatter()
+    fmtB.formatOptions = [.withInternetDateTime]
+    if let d = fmtB.date(from: str) { return d }
+
+    let df = DateFormatter()
+    df.locale = Locale(identifier: "en_US_POSIX")
+    for pattern in ["yyyy-MM-dd'T'HH:mm:ss.SSSZ", "yyyy-MM-dd'T'HH:mm:ssZ", "yyyy-MM-dd'T'HH:mm:ss"] {
+        df.dateFormat = pattern
+        if let d = df.date(from: str) { return d }
+    }
+    return nil
+}
+
 func weeklyWakeData() -> [WakeDataPoint] {
     let sessions = loadSessions()
     let range = getWeekRange()
@@ -68,21 +86,15 @@ func weeklyWakeData() -> [WakeDataPoint] {
         let ds = fmt.string(from: d)
         let label = dayFmt.string(from: d)
 
-        if let session = sessions.first(where: { $0.date == ds }) {
-            let isoFmt = ISO8601DateFormatter()
-            isoFmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            let altFmt = ISO8601DateFormatter()
-            altFmt.formatOptions = [.withInternetDateTime]
-
-            if let wakeDate = isoFmt.date(from: session.wakeTime) ?? altFmt.date(from: session.wakeTime) {
-                let hour = Double(cal.component(.hour, from: wakeDate)) +
-                           Double(cal.component(.minute, from: wakeDate)) / 60.0
-                return WakeDataPoint(
-                    dayLabel: label,
-                    wakeHour: hour,
-                    wakeTimeFormatted: timeFmt.string(from: wakeDate)
-                )
-            }
+        if let session = sessions.first(where: { $0.date == ds }),
+           let wakeDate = parseISO(session.wakeTime) {
+            let hour = Double(cal.component(.hour, from: wakeDate)) +
+                       Double(cal.component(.minute, from: wakeDate)) / 60.0
+            return WakeDataPoint(
+                dayLabel: label,
+                wakeHour: hour,
+                wakeTimeFormatted: timeFmt.string(from: wakeDate)
+            )
         }
 
         return WakeDataPoint(dayLabel: label, wakeHour: nil, wakeTimeFormatted: nil)
@@ -123,8 +135,17 @@ struct WakeTimelineProvider: TimelineProvider {
 struct WakeChartView: View {
     let data: [WakeDataPoint]
 
-    private let minHour: Double = 4
-    private let maxHour: Double = 13
+    private var minHour: Double {
+        let hours = data.compactMap { $0.wakeHour }
+        guard !hours.isEmpty else { return 6 }
+        return Double(max(0, Int(hours.min()!) - 1))
+    }
+
+    private var maxHour: Double {
+        let hours = data.compactMap { $0.wakeHour }
+        guard !hours.isEmpty else { return 10 }
+        return Double(min(24, Int(ceil(hours.max()!)) + 1))
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -136,37 +157,23 @@ struct WakeChartView: View {
             let bottomPad: CGFloat = 18
             let plotW = w - leftPad - rightPad
             let plotH = h - topPad - bottomPad
-            let hourRange = maxHour - minHour
+            let hourRange = max(maxHour - minHour, 2)
 
             ZStack(alignment: .topLeading) {
-                // Hour grid lines
                 ForEach(Int(minHour)...Int(maxHour), id: \.self) { hour in
                     let frac = CGFloat(Double(hour) - minHour) / CGFloat(hourRange)
                     let y = topPad + frac * plotH
 
-                    // Full hour line
                     Path { path in
                         path.move(to: CGPoint(x: leftPad, y: y))
                         path.addLine(to: CGPoint(x: w - rightPad, y: y))
                     }
                     .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
 
-                    // Hour label
                     Text(hourLabel(hour))
                         .font(.system(size: 8, weight: .medium))
                         .foregroundColor(Color.white.opacity(0.35))
                         .position(x: leftPad - 14, y: y)
-
-                    // Half-hour dotted line
-                    if hour < Int(maxHour) {
-                        let halfFrac = CGFloat(Double(hour) + 0.5 - minHour) / CGFloat(hourRange)
-                        let halfY = topPad + halfFrac * plotH
-                        Path { path in
-                            path.move(to: CGPoint(x: leftPad, y: halfY))
-                            path.addLine(to: CGPoint(x: w - rightPad, y: halfY))
-                        }
-                        .stroke(Color.white.opacity(0.04), style: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
-                    }
                 }
 
                 // Day labels
