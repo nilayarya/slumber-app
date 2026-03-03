@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
-import { Platform, NativeModules } from "react-native";
+import { Platform } from "react-native";
 
 const STORAGE_KEY = "slumber:sessions:v1";
 const APP_GROUP = "group.com.slumber.sleeptracker";
@@ -89,12 +89,12 @@ async function loadAll(): Promise<SleepSession[]> {
 async function syncToWidget(json: string): Promise<void> {
   if (Platform.OS !== "ios") return;
   try {
-    const { WidgetSyncModule } = NativeModules;
-    if (WidgetSyncModule) {
+    const mod = require("./widget-sync-bridge");
+    if (mod && mod.syncData) {
       console.log(`[Slumber] Widget sync: writing ${json.length} bytes to App Group ${APP_GROUP}`);
-      WidgetSyncModule.syncData(STORAGE_KEY, json, APP_GROUP);
+      mod.syncData(STORAGE_KEY, json, APP_GROUP);
     } else {
-      console.log("[Slumber] Widget sync: WidgetSyncModule not available (native module not linked)");
+      console.log("[Slumber] Widget sync: module loaded but syncData not found");
     }
   } catch (e) {
     console.log("[Slumber] Widget sync error:", e);

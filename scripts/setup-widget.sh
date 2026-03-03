@@ -11,20 +11,9 @@ if [ ! -d "ios/Slumber.xcworkspace" ]; then
   npx expo prebuild --platform ios
 fi
 
-echo "📁 Copying native sync module into iOS project..."
-cp modules/widget-sync/ios/WidgetSyncModule.swift ios/Slumber/
-cp modules/widget-sync/ios/WidgetSyncModule.m ios/Slumber/
-
-HEADER="ios/Slumber/Slumber-Bridging-Header.h"
-if [ ! -f "$HEADER" ]; then
-  echo "📝 Creating bridging header..."
-  echo '#import <React/RCTBridgeModule.h>' > "$HEADER"
-else
-  if ! grep -q "RCTBridgeModule" "$HEADER"; then
-    echo '#import <React/RCTBridgeModule.h>' >> "$HEADER"
-  fi
-fi
-
+echo "📁 The WidgetSyncModule is now an Expo Module (auto-linked during prebuild)."
+echo "   No manual file copying needed for the sync module."
+echo ""
 echo "📁 Creating widget extension folder..."
 mkdir -p "ios/SlumberWidget"
 cp targets/widget/SlumberWidget.swift ios/SlumberWidget/
