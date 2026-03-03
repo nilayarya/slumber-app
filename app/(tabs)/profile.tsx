@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { localDateString } from "@/lib/sleep-utils";
 import Colors from "@/constants/colors";
 import { useSleep } from "@/lib/sleep-context";
 import {
@@ -51,7 +52,7 @@ export default function ProfileScreen() {
     for (let i = 0; i < 30; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() - i);
-      const ds = d.toISOString().split("T")[0];
+      const ds = localDateString(d);
       if (sessions.find(s => s.date === ds)) count++;
       else break;
     }

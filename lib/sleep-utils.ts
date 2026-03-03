@@ -54,8 +54,8 @@ export function getWeekRange(date = new Date()): { start: string; end: string } 
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
   return {
-    start: monday.toISOString().split("T")[0],
-    end: sunday.toISOString().split("T")[0],
+    start: localDateString(monday),
+    end: localDateString(sunday),
   };
 }
 
@@ -63,13 +63,13 @@ export function getMonthRange(date = new Date()): { start: string; end: string }
   const start = new Date(date.getFullYear(), date.getMonth(), 1);
   const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
   return {
-    start: start.toISOString().split("T")[0],
-    end: end.toISOString().split("T")[0],
+    start: localDateString(start),
+    end: localDateString(end),
   };
 }
 
 export function todayString(): string {
-  return new Date().toISOString().split("T")[0];
+  return localDateString(new Date());
 }
 
 export function avgDuration(sessions: SleepSession[]): number {

@@ -285,7 +285,7 @@ export default function LogEntryScreen() {
     const dayBefore = (() => {
       const d = new Date(targetDate + "T12:00:00");
       d.setDate(d.getDate() - 1);
-      return d.toISOString().split("T")[0];
+      return localDateString(d);
     })();
     const sleepISO = buildISO(dayBefore, bedHour, bedMinute, bedPeriod);
     const wakeISO = buildISO(targetDate, wakeHour, wakeMinute, wakePeriod, sleepISO);
@@ -362,7 +362,7 @@ export default function LogEntryScreen() {
                   const d = new Date(targetDate + "T12:00:00");
                   if (targetDate === today) return "Today";
                   const yd = new Date(); yd.setDate(yd.getDate() - 1);
-                  if (targetDate === yd.toISOString().split("T")[0]) return "Yesterday";
+                  if (targetDate === localDateString(yd)) return "Yesterday";
                   return d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
                 })()}
               </Text>
@@ -375,7 +375,7 @@ export default function LogEntryScreen() {
                   for (let i = 0; i < 30; i++) {
                     const d = new Date();
                     d.setDate(d.getDate() - i);
-                    const ds = d.toISOString().split("T")[0];
+                    const ds = localDateString(d);
                     const label = i === 0 ? "Today" : i === 1 ? "Yesterday" : d.toLocaleDateString([], { month: "short", day: "numeric" });
                     days.push({ label, date: ds, isSelected: ds === targetDate, isToday: i === 0 });
                   }

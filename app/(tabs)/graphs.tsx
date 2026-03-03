@@ -16,6 +16,7 @@ import { useSleep } from "@/lib/sleep-context";
 import {
   getWeekRange,
   getMonthRange,
+  localDateString,
 } from "@/lib/sleep-utils";
 import type { SleepSession } from "@/lib/sleep-store";
 
@@ -63,9 +64,9 @@ function BarChart({ sessions, period }: { sessions: SleepSession[]; period: Peri
   const days = Array.from({ length: count }, (_, i) => {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
-    const ds = d.toISOString().split("T")[0];
+    const ds = localDateString(d);
     const session = sessions.find(s => s.date === ds);
-    return { ds, session, isToday: ds === new Date().toISOString().split("T")[0] };
+    return { ds, session, isToday: ds === localDateString(new Date()) };
   });
 
   const targetY = ch - (targetM / maxM) * ch;
@@ -141,7 +142,7 @@ function WakeUpChart({ sessions }: { sessions: SleepSession[] }) {
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
-    const ds = d.toISOString().split("T")[0];
+    const ds = localDateString(d);
     const session = sessions.find(s => s.date === ds);
     const dayIdx = (d.getDay() + 6) % 7;
     let wakeHr: number | null = null;
