@@ -84,6 +84,7 @@ struct WeeklyResult {
     let points: [WakeDataPoint]
     let totalSessions: Int
     let matchedCount: Int
+    let debugInfo: String
 }
 
 func weeklyWakeData() -> WeeklyResult {
@@ -102,10 +103,12 @@ func weeklyWakeData() -> WeeklyResult {
     dayFmt.dateFormat = "EEE"
 
     var matched = 0
+    var chartDates: [String] = []
 
     let points: [WakeDataPoint] = (0..<7).map { i in
         let d = cal.date(byAdding: .day, value: i, to: startDate)!
         let ds = fmt.string(from: d)
+        chartDates.append(ds)
         let label = dayFmt.string(from: d)
 
         if let session = sessions.first(where: { $0.date == ds }),
@@ -124,7 +127,11 @@ func weeklyWakeData() -> WeeklyResult {
         return WakeDataPoint(id: i, dayLabel: label, wakeHour: nil, wakeTimeFormatted: nil)
     }
 
-    return WeeklyResult(points: points, totalSessions: sessions.count, matchedCount: matched)
+    let sessionDates = sessions.map { $0.date }.joined(separator: ",")
+    let slotRange = "\(chartDates.first ?? "?")→\(chartDates.last ?? "?")"
+    let debug = "S:\(sessionDates) R:\(slotRange)"
+
+    return WeeklyResult(points: points, totalSessions: sessions.count, matchedCount: matched, debugInfo: debug)
 }
 
 // MARK: - Timeline
@@ -134,22 +141,23 @@ struct WakeTimelineEntry: TimelineEntry {
     let wakeData: [WakeDataPoint]
     let totalSessions: Int
     let matchedCount: Int
+    let debugInfo: String
 }
 
 struct WakeTimelineProvider: TimelineProvider {
     func placeholder(in context: Context) -> WakeTimelineEntry {
         let sample = sampleData()
-        return WakeTimelineEntry(date: Date(), wakeData: sample, totalSessions: 5, matchedCount: 5)
+        return WakeTimelineEntry(date: Date(), wakeData: sample, totalSessions: 5, matchedCount: 5, debugInfo: "placeholder")
     }
 
     func getSnapshot(in context: Context, completion: @escaping (WakeTimelineEntry) -> Void) {
         let result = weeklyWakeData()
-        completion(WakeTimelineEntry(date: Date(), wakeData: result.points, totalSessions: result.totalSessions, matchedCount: result.matchedCount))
+        completion(WakeTimelineEntry(date: Date(), wakeData: result.points, totalSessions: result.totalSessions, matchedCount: result.matchedCount, debugInfo: result.debugInfo))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<WakeTimelineEntry>) -> Void) {
         let result = weeklyWakeData()
-        let entry = WakeTimelineEntry(date: Date(), wakeData: result.points, totalSessions: result.totalSessions, matchedCount: result.matchedCount)
+        let entry = WakeTimelineEntry(date: Date(), wakeData: result.points, totalSessions: result.totalSessions, matchedCount: result.matchedCount, debugInfo: result.debugInfo)
         let nextUpdate = Calendar.current.date(byAdding: .minute, value: 30, to: Date())!
         completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
     }
@@ -312,6 +320,12 @@ struct SlumberWidgetView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
 
+                Text(entry.debugInfo)
+                    .font(.system(size: 7, weight: .regular, design: .monospaced))
+                    .foregroundColor(Color.white.opacity(0.2))
+                    .lineLimit(2)
+                    .padding(.horizontal, 16)
+
                 if hasData {
                     WakeChartView(data: entry.wakeData)
                         .padding(.horizontal, 8)
@@ -364,7 +378,8 @@ struct SlumberWidget_Previews: PreviewProvider {
                 date: Date(),
                 wakeData: WakeTimelineProvider().sampleData(),
                 totalSessions: 5,
-                matchedCount: 5
+                matchedCount: 5,
+                debugInfo: "preview"
             )
         )
         .previewContext(WidgetPreviewContext(family: .systemMedium))
